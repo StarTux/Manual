@@ -1,0 +1,19 @@
+name: Manual
+description: Create book manuals
+author: StarTux
+version: 0.1
+main: com.winthier.manual.ManualPlugin
+depend: [ Custom ]
+softdepend: []
+commands:
+  manual:
+    aliases: [man]
+    description: manual
+    permission: manual.manual
+    usage: |-
+      /manual give <manual> [player] - Spawn a manual
+      /manual reload - Reload manuals
+permissions:
+  manual.manual:
+    description: use /manual
+    default: op
