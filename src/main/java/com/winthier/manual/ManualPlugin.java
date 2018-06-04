@@ -119,7 +119,8 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
         if (!file.isFile() || !file.canRead()) return null;
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
         List<List<Object>> pages = new ArrayList<>();
-        Map<String, Integer> anchors = new LinkedHashMap<>();
+        Map<String, Integer> anchors = new HashMap<>();
+        Map<String, Integer> chapters = new LinkedHashMap<>();
         List<Map<String, Object>> references = new ArrayList<>();
         List<Object> pageList = (List<Object>)config.getList("pages");
         if (pageList == null || pageList.isEmpty()) return null;
@@ -131,6 +132,11 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
                 @SuppressWarnings("unchecked")
                 final ConfigurationSection section = config.createSection("tmp", (Map<?, ?>)o);
                 Map map = new HashMap<>();
+                if (section.isSet("chapter")) {
+                    String chapterName = section.getString("chapter");
+                    chapters.put(chapterName, pages.size());
+                    anchors.put(chapterName, pages.size());
+                }
                 if (section.isSet("anchor")) {
                     anchors.put(section.getString("anchor"), pages.size());
                 }
@@ -197,14 +203,15 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
         boolean tableOfContents = config.getBoolean("TableOfContents");
         if (tableOfContents) {
             page = new ArrayList<>();
+            page.add(format("&lTable of Contents&r\n"));
             int entries = 0;
-            for (String anchor: anchors.keySet()) {
-                Integer pageNo = anchors.get(anchor);
+            int chapterNo = 0;
+            for (String chapter: chapters.keySet()) {
+                chapterNo += 1;
+                Integer pageNo = chapters.get(chapter);
                 pageNo += 2;
                 Map<String, Object> tocEntry = new HashMap<>();
-                tocEntry.put("text", pageNo + " " + anchor);
-                tocEntry.put("color", "blue");
-                tocEntry.put("underlined", true);
+                tocEntry.put("text", chapterNo + ". " + ChatColor.BLUE + chapter);
                 Map<String, Object> clickEvent = new HashMap<>();
                 tocEntry.put("clickEvent", clickEvent);
                 clickEvent.put("action", "change_page");
