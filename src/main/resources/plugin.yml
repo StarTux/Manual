@@ -16,6 +16,7 @@ commands:
       /manual reload - Reload manuals
       /manual info - Info about manual in hand
       /manual reloadhand - Reload and force update manual in hand
+      /manual url <url> - Generate manual from URL
 permissions:
   manual.manual:
     description: use /manual

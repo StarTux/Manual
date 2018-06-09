@@ -5,11 +5,19 @@ import com.winthier.custom.event.CustomRegisterEvent;
 import com.winthier.custom.util.Dirty;
 import com.winthier.custom.util.Items;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.Value;
@@ -25,6 +33,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.json.simple.JSONValue;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 public final class ManualPlugin extends JavaPlugin implements Listener {
     private final Map<String, Manual> manuals = new HashMap<>();
@@ -123,6 +133,31 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
                 player.sendMessage("Updated item in hand with " + manual.getName() + " Version " + manual.getVersion());
             }
             break;
+        case "url":
+            if (player != null && args.length == 2) {
+                URL url;
+                try {
+                    url = new URL(args[1]);
+                } catch (MalformedURLException murle) {
+                    player.sendMessage("Invalid URL: " + args[1]);
+                    return true;
+                }
+                Manual manual = null;
+                try {
+                    HttpURLConnection hurlc = (HttpURLConnection)url.openConnection();
+                    hurlc.addRequestProperty("User-Agent", "Mozilla/4.0");
+                    String dump = new Scanner(hurlc.getInputStream(), "UTF-8").useDelimiter("\\A").next();
+                    manual = parseManual(dump, "url", player);
+                } catch (IOException ioe) {
+                    ioe.printStackTrace();
+                }
+                if (manual == null) return true;
+                ItemStack item = CustomPlugin.getInstance().getItemManager().spawnItemStack(ManualItem.CUSTOM_ID, 1);
+                ManualItem.setManual(item, manual);
+                player.getInventory().addItem(item);
+                player.sendMessage("Manual from URL given: " + url);
+            }
+            break;
         case "list":
             sender.sendMessage("All loaded manuals:");
             for (Manual manual2: manuals.values()) {
@@ -162,13 +197,54 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
     }
 
     Manual createManual(String name) {
-        File file = new File(new File(getDataFolder(), "books"), name + ".yml");
+        File file = new File(new File(getDataFolder(), "books"), name + ".json");
         if (!file.isFile() || !file.canRead()) return null;
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        String dump;
+        try {
+            dump = new String(Files.readAllBytes(file.toPath()));
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return null;
+        }
+        return parseManual(dump, name, getServer().getConsoleSender());
+    }
+
+    private Manual parseManual(String json, String name, CommandSender sender) {
+        final Map<String, Object> map;
+        JSONParser parser = new JSONParser();
+        try {
+            final Map<String, Object> tmp = (Map<String, Object>)parser.parse(json);
+            map = tmp;
+        } catch (ParseException pe) {
+            int pos = pe.getPosition();
+            String before = json.substring(0, pos);
+            int linum = 0;
+            int chnum = 0;
+            for (int i = 0; i < before.length(); i += 1) {
+                char c = before.charAt(i);
+                if (c == '\n') {
+                    linum += 1;
+                    chnum = 0;
+                } else {
+                    chnum += 1;
+                }
+            }
+            String msg = json.substring(Math.max(0, pos - 12), pos) + ChatColor.YELLOW + json.substring(pos, pos + 1) + ChatColor.RESET + json.substring(Math.min(json.length(), pos + 1), Math.min(json.length(), pos + 12));
+            sender.sendMessage("JSON error at line " + (linum + 1) + " char " + (chnum + 1) + ": " + msg.replace("\n", "\\n"));
+            return null;
+        } catch (ClassCastException cce) {
+            sender.sendMessage("JSON Dictionary expected");
+            return null;
+        }
+        return createManual(new YamlConfiguration().createSection("tmp", map), name);
+    }
+
+    Manual createManual(ConfigurationSection config, String name) {
         List<List<Object>> pages = new ArrayList<>();
         Map<String, Integer> anchors = new HashMap<>();
         Map<String, Integer> chapters = new LinkedHashMap<>();
         List<Map<String, Object>> references = new ArrayList<>();
+        @SuppressWarnings("unchecked")
         List<Object> pageList = (List<Object>)config.getList("pages");
         if (pageList == null || pageList.isEmpty()) return null;
         List<Object> page = new ArrayList<>();
@@ -177,7 +253,7 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
             if (o instanceof Map) {
                 @SuppressWarnings("unchecked")
                 final ConfigurationSection section = config.createSection("tmp", (Map<?, ?>)o);
-                Map map = new HashMap<>();
+                Map<String, Object> map = new HashMap<>();
                 if (section.isSet("chapter")) {
                     String chapterName = section.getString("chapter");
                     chapters.put(chapterName, pages.size());
