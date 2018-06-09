@@ -12,6 +12,7 @@ commands:
     permission: manual.manual
     usage: |-
       /manual give <manual> [player] - Spawn a manual
+      /manual list - List loaded manuals
       /manual reload - Reload manuals
 permissions:
   manual.manual:

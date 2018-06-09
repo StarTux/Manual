@@ -4,6 +4,7 @@ import com.winthier.custom.item.CustomItem;
 import com.winthier.custom.item.UncraftableItem;
 import com.winthier.custom.item.UpdatableItem;
 import com.winthier.custom.util.Dirty;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
@@ -22,6 +23,26 @@ public final class ManualItem implements CustomItem, UpdatableItem, UncraftableI
     @Override
     public ItemStack spawnItemStack(int amount) {
         return new ItemStack(Material.WRITTEN_BOOK, amount);
+    }
+
+    @Override
+    public void setItemData(ItemStack item, Map<String, Object> data) {
+        for (Map.Entry<String, Object> entry: data.entrySet()) {
+            Object value = entry.getValue();
+            switch (entry.getKey()) {
+            case "name":
+                if (value instanceof String) {
+                    String name = (String)value;
+                    ManualPlugin.Manual manual = plugin.getManual(name);
+                    if (manual != null) {
+                        setManual(item, manual);
+                    }
+                }
+                break;
+            default:
+                break;
+            }
+        }
     }
 
     @Override

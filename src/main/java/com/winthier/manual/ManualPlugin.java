@@ -82,6 +82,12 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
             manuals.clear();
             sender.sendMessage("Manuals reloaded.");
             break;
+        case "list":
+            sender.sendMessage("All loaded manuals:");
+            for (Manual manual2: manuals.values()) {
+                sender.sendMessage("- " + manual2.getName() + " Version " + manual2.getVersion());
+            }
+            break;
         default:
             return false;
         }
