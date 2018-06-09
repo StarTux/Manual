@@ -14,6 +14,8 @@ commands:
       /manual give <manual> [player] - Spawn a manual
       /manual list - List loaded manuals
       /manual reload - Reload manuals
+      /manual info - Info about manual in hand
+      /manual reloadhand - Reload and force update manual in hand
 permissions:
   manual.manual:
     description: use /manual

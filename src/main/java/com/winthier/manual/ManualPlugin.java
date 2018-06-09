@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.Value;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -52,35 +54,74 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
         if (args.length == 0) return false;
         switch (args[0]) {
         case "give":
-            if (args.length < 2) return false;
-            Manual manual = getManual(args[1]);
-            if (manual == null) {
-                sender.sendMessage("Manual not found: " + args[1]);
-                return true;
-            }
-            final Player target;
-            if (args.length >= 3) {
-                target = getServer().getPlayerExact(args[2]);
-                if (target == null) {
-                    sender.sendMessage("Player not found: " + args[2]);
+            if (args.length >= 2) {
+                Manual manual = getManual(args[1]);
+                if (manual == null) {
+                    sender.sendMessage("Manual not found: " + args[1]);
                     return true;
                 }
-            } else if (player == null) {
-                sender.sendMessage("Player required");
-                return true;
-            } else {
-                target = player;
+                final Player target;
+                if (args.length >= 3) {
+                    target = getServer().getPlayerExact(args[2]);
+                    if (target == null) {
+                        sender.sendMessage("Player not found: " + args[2]);
+                        return true;
+                    }
+                } else if (player == null) {
+                    sender.sendMessage("Player required");
+                    return true;
+                } else {
+                    target = player;
+                }
+                ItemStack item = CustomPlugin.getInstance().getItemManager().spawnItemStack(ManualItem.CUSTOM_ID, 1);
+                ManualItem.setManual(item, manual);
+                for (ItemStack drop: target.getInventory().addItem(item).values()) {
+                    Items.give(drop, target);
+                }
+                sender.sendMessage("Manual " + manual.getName() + " given to " + target.getName());
             }
-            ItemStack item = CustomPlugin.getInstance().getItemManager().spawnItemStack(ManualItem.CUSTOM_ID, 1);
-            ManualItem.setManual(item, manual);
-            for (ItemStack drop: target.getInventory().addItem(item).values()) {
-                Items.give(drop, target);
-            }
-            sender.sendMessage("Manual " + manual.getName() + " given to " + target.getName());
             break;
         case "reload":
             manuals.clear();
             sender.sendMessage("Manuals reloaded.");
+            break;
+        case "info":
+        case "name":
+            if (player != null) {
+                ItemStack item = player.getInventory().getItemInMainHand();
+                if (item == null || item.getAmount() == 0) {
+                    player.sendMessage("Hand is empty!");
+                    return true;
+                }
+                String customId = CustomPlugin.getInstance().getItemManager().getCustomId(item);
+                if (customId == null || !customId.equals(ManualItem.CUSTOM_ID)) {
+                    player.sendMessage("No manual in hand!");
+                    return true;
+                }
+                player.sendMessage("Manual in hand: " + ManualItem.getName(item));
+            }
+            break;
+        case "reloadhand":
+            if (player != null) {
+                ItemStack item = player.getInventory().getItemInMainHand();
+                if (item == null || item.getAmount() == 0) {
+                    player.sendMessage("Hand is empty!");
+                    return true;
+                }
+                String customId = CustomPlugin.getInstance().getItemManager().getCustomId(item);
+                if (customId == null || !customId.equals(ManualItem.CUSTOM_ID)) {
+                    player.sendMessage("No manual in hand!");
+                    return true;
+                }
+                String name = ManualItem.getName(item);
+                Manual manual = createManual(name);
+                if (manual == null) {
+                    player.sendMessage("Manual not found: " + name);
+                    return true;
+                }
+                ManualItem.setManual(item, manual);
+                player.sendMessage("Updated item in hand with " + manual.getName() + " Version " + manual.getVersion());
+            }
             break;
         case "list":
             sender.sendMessage("All loaded manuals:");
@@ -130,7 +171,6 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
         List<Map<String, Object>> references = new ArrayList<>();
         List<Object> pageList = (List<Object>)config.getList("pages");
         if (pageList == null || pageList.isEmpty()) return null;
-        if (!"page".equals(pageList.get(pageList.size() - 1))) pageList.add("page");
         List<Object> page = new ArrayList<>();
         page.add("");
         for (Object o: pageList) {
@@ -189,20 +229,95 @@ public final class ManualPlugin extends JavaPlugin implements Listener {
                 if (!map.isEmpty()) page.add(map);
             } else if (o instanceof String) {
                 String par = (String)o;
-                switch (par) {
-                case "page":
+                try {
+                    Pattern pattern = Pattern.compile("\\{[^}]+\\}");
+                    Matcher matcher = pattern.matcher(par);
+                    int prevEnd = 0;
+                    while (matcher.find()) {
+                        String group = matcher.group();
+                        group = group.substring(1, group.length() - 1);
+                        String[] toks = group.split("\\|");
+                        Map<String, Object> tag = new HashMap<>();
+                        switch (toks[0].toLowerCase()) {
+                        case "command":
+                            if (toks.length >= 3 && toks.length <= 4) {
+                                tag.put("text", format(toks[1]) + ChatColor.RESET);
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "run_command");
+                                event.put("value", toks[2]);
+                                tag.put("clickEvent", event);
+                            }
+                            if (toks.length >= 4) {
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "show_text");
+                                event.put("value", format(toks[3]));
+                                tag.put("hoverEvent", event);
+                            }
+                            break;
+                        case "url":
+                            if (toks.length >= 3 && toks.length <= 4) {
+                                tag.put("text", format(toks[1]) + ChatColor.RESET);
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "open_url");
+                                event.put("value", toks[2]);
+                                tag.put("clickEvent", event);
+                            }
+                            if (toks.length >= 4) {
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "show_text");
+                                event.put("value", format(toks[3]));
+                                tag.put("hoverEvent", event);
+                            }
+                            break;
+                        case "tooltip":
+                            if (toks.length == 3) {
+                                tag.put("text", format(toks[1]) + ChatColor.RESET);
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "show_text");
+                                event.put("value", format(toks[2]));
+                                tag.put("hoverEvent", event);
+                            }
+                            break;
+                        case "page":
+                            if (toks.length >= 3 && toks.length <= 4) {
+                                tag.put("text", format(toks[1]) + ChatColor.RESET);
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "change_page");
+                                try {
+                                    event.put("value", Integer.parseInt(toks[2]));
+                                } catch (NumberFormatException nfe) { }
+                                tag.put("clickEvent", event);
+                            }
+                            if (toks.length >= 4) {
+                                Map<String, Object> event = new HashMap<>();
+                                event.put("action", "show_text");
+                                event.put("value", format(toks[3]));
+                                tag.put("hoverEvent", event);
+                            }
+                        case "chapter":
+                            if (toks.length == 2) {
+                                chapters.put(toks[1], pages.size());
+                                anchors.put(toks[1], pages.size());
+                            }
+                        case "anchor":
+                            if (toks.length == 2) {
+                                anchors.put(toks[1], pages.size());
+                            }
+                            break;
+                        default:
+                            getLogger().info("Unknown tag: " + toks[0]);
+                        }
+                        page.add(format(par.substring(prevEnd, matcher.start())));
+                        prevEnd = matcher.end();
+                        if (!tag.isEmpty()) page.add(tag);
+                    }
+                    page.add(format(par.substring(prevEnd, par.length())));
                     pages.add(page);
                     page = new ArrayList<>();
                     page.add("");
-                    break;
-                case "newline":
-                    page.add("\n");
-                    break;
-                default:
-                    if (par.startsWith("anchor")) {
-                    } else {
-                        page.add(format(par));
-                    }
+                } catch (RuntimeException re) {
+                    re.printStackTrace();
+                    return null;
                 }
             }
         }

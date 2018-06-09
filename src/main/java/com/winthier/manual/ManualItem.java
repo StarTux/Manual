@@ -65,6 +65,11 @@ public final class ManualItem implements CustomItem, UpdatableItem, UncraftableI
         return Dirty.applyMap(item, manual.getItemTag());
     }
 
+    static String getName(ItemStack item) {
+        Dirty.TagWrapper conf = Dirty.TagWrapper.getItemConfigOf(item);
+        return conf.getString("name");
+    }
+
     static void setManual(ItemStack item, ManualPlugin.Manual manual) {
         Dirty.TagWrapper conf = Dirty.TagWrapper.getItemConfigOf(item);
         conf.setString("name", manual.getName());
