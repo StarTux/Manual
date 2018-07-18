@@ -2,6 +2,7 @@ name: Manual
 description: Create book manuals
 author: StarTux
 version: 0.1
+api-version: 1.13
 main: com.winthier.manual.ManualPlugin
 depend: [ Custom ]
 softdepend: []
